@@ -26,20 +26,17 @@ Importing the libraries. As I have already mentioned above the list of libraries
     !pip install ["Name of the library"]
     
 If the libraries are already installed then we have to import those into our script by mentioning the below codes.
- 
-    import pandas as pd
-    import json
-    import os
-    from PIL import Image
+
     import streamlit as st
-    import pymysql
-    import sqlalchemy
-    from sqlalchemy import create_engine
-    from sqlalchemy import text
+    import pandas as pd
+    import mysql.connector as msql
+    from mysql.connector import Error
     import plotly.express as px
+    import geopandas as gpd
     from streamlit_option_menu import option_menu
-    import plotly.graph_objects as go
-    
+    from PIL import Image
+    import os
+
 # Step 2:
 
 Data extraction:
@@ -53,36 +50,47 @@ Data transformation:
 
 In this step the JSON files that are available in the folders are converted into the readeable and understandable DataFrame format by using the for loop and iterating file by file and then finally the DataFrame is created. In order to perform this step I've used os, json and pandas packages. And finally converted the dataframe into CSV file and storing in the local drive.   
 
-    agg_col={'State':[],'Year':[],'Quarter':[],'Transaction_type':[],'Transaction_count':[],'Transaction_amount':[]}
-    path="C:/Users/Sudharshan/Phonepe Pulse Data Visualization/data/aggregated/transaction/country/india/state/"
-    agg_content=os.listdir(path)
+       import os
+       path = "C:/Users/Sudharshan/Phonepe Pulse Data Visualization/data/aggregated/transaction/country/india/state/" 
+       agg_trans_st_dir = os.listdir(path)
+       agg_trans_st_dir
 
 Looping through each and every folder and opening the json files appending only the required key and values and creating the dataframe.    
   
-     for i in agg_content:
-          state_i=os.path.join(path,i)
-    for j in os.listdir(state_i):
-        year_j=os.path.join(state_i,j)
-        for k in os.listdir(year_j):
-            quat_k=os.path.join(year_j,k)
-            with open(quat_k) as f:
-                data=json.load(f)
-                for L in data['data']['transactionData']:
-                   Name=L['name']
-                   Count=L['paymentInstruments'][0]['count']
-                   Amount=L['paymentInstruments'][0]['amount']
-                   agg_col['State'].append(i)
-                   agg_col['Year'].append(j)
-                   agg_col['Quarter'].append(int(k.strip('.json')))
-                   agg_col['Transaction_type'].append(Name)
-                   agg_col['Transaction_count'].append(Count)
-                   agg_col['Transaction_amount'].append(Amount)
-                                  
-       agg_dataframe=pd.DataFrame(agg_col)       
-  
+       agg_trans_dict = {'State':[],
+                         'Year':[],
+                         'Quater':[],
+                         'Transacion_type':[],
+                         'Transacion_count':[],
+                         'Transacion_amount':[]}
+
+     for i in agg_trans_st_dir:
+           st_path = path+i+'/'
+           st_year = os.listdir(st_path)
+     for j in st_year:   
+          st_year_path = st_path+j+'/'
+          st_year_dir = os.listdir(st_year_path)
+     for k in st_year_dir:
+         json_path = st_year_path+k
+         jsonData = open(json_path, 'r')
+         Data = json.load(jsonData)
+     for x in Data['data']['transactionData']:
+                    Name = x['name']
+                    count = x['paymentInstruments'][0]['count']
+                    amount = x['paymentInstruments'][0]['amount']
+                    agg_trans_dict['Transacion_type'].append(Name)
+                    agg_trans_dict['Transacion_count'].append(count)
+                    agg_trans_dict['Transacion_amount'].append(amount)
+                    agg_trans_dict['State'].append(i)
+                    agg_trans_dict['Year'].append(j)
+                    agg_trans_dict['Quater'].append('Q'+k.strip('.json'))
+
+     agg_trans_df = pd.DataFrame(agg_trans_dict)
+     agg_trans_df
+     
 # Converting the dataframe into csv file
 
-     agg_dataframe.to_csv('agg_dataframe.csv',index=False)
+     agg_trans_df.to_csv('AggTransByStates.csv',index=False)
 
 # Step 4:
 
@@ -92,32 +100,63 @@ To insert the datadrame into SQL first I've created a new database and tables us
 
 Creating the connection between python and mysql
 
-    host='localhost'
-    user='root'
-    password='Dharshan1996'
-    port=3306
-    database='phonepe_pulse'
-    engine = create_engine(f'mysql+pymysql://{user}:{password}@{host}:{port}/{database}')
-    connection=engine.connect()
-    
+   try:
+    conn = msql.connect(host='localhost',
+                           database='phonepe_pulse', user='root',
+                           password='Dharshan1996')
+    if conn.is_connected():
+        cursor = conn.cursor()
+        cursor.execute("select database();")
+        record = cursor.fetchone()
+        
+        cursor.execute('DROP TABLE IF EXISTS mapTransByDistrict;')
+       
+        cursor.execute("CREATE TABLE mapTransByDistrict\
+                       (State varchar(100),\
+                        Year int,\
+                        Quater varchar(5),\
+                        District varchar(50),\
+                        Transaction_count int,\
+                        Transaction_amount float(50,3))")
+                       
+        print("mapTransByDistrict table is created....")
+        for i,row in mapTransByDistrict.iterrows():
+            sql = "INSERT INTO Phonepe_Pulse.mapTransByDistrict VALUES (%s,%s,%s,%s,%s,%s)"
+            cursor.execute(sql, tuple(row))                        
+            conn.commit()
+        print("mapTransByDistrict values are inserted to MySQL....")
+    except Error as e:
+    print("Error while connecting to MySQL", e)
+       
 Creating tables
     
-    create_table_sql = """
-    CREATE TABLE `aggregated_transaction` (
-        `serial_no` INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-        `State` VARCHAR(255) NOT NULL,
-        `Year` INT NOT NULL,
-        `Quarter` INT NOT NULL,
-        `Transaction_type` VARCHAR(255) NOT NULL,
-        `Transaction_count` INT NOT NULL,
-        `Transaction_amount` FLOAT NOT NULL
-    );
-    """
-
-    connection.execute(text(create_table_sql))
-    df_agg_trans = pd.read_csv("C:/Users/Sudharshan/Phonepe Pulse Data Visualization/agg_dataframe.csv")
-
-    df_agg_trans.to_sql(name='aggregated_transaction', con=engine, if_exists='replace', index=False)
+    try:
+    conn = msql.connect(host='localhost',
+                           database='phonepe_pulse', user='root',
+                           password='Dharshan1996')
+    if conn.is_connected():
+        cursor = conn.cursor()
+        cursor.execute("select database();")
+        record = cursor.fetchone()
+        
+        cursor.execute('DROP TABLE IF EXISTS mapUserByDistReg;')
+       
+        cursor.execute("CREATE TABLE mapUserByDistReg\
+                       (State varchar(100),\
+                        Year int,\
+                        Quater varchar(5),\
+                        District varchar(50),\
+                        Registered_user int,\
+                        App_opening int)")
+                       
+        print("mapUserByDistReg table is created....")
+        for i,row in mapUserByDistReg.iterrows():
+            sql = "INSERT INTO Phonepe_Pulse.mapUserByDistReg VALUES (%s,%s,%s,%s,%s,%s)"
+            cursor.execute(sql, tuple(row))                        
+            conn.commit()
+        print("mapUserByDistReg values are inserted to MySQL....")
+    except Error as e:
+    print("Error while connecting to MySQL", e)
     
 # Step 5:
 
@@ -129,4 +168,4 @@ To create colourful and insightful dashboard I've used Plotly libraries in Pytho
 
 Data retrieval:
 
-Finally if needed Using the "pymysql&sqlalchemy" library to connect to the MySQL database and fetch the data into a Pandas dataframe.   
+Finally if needed Using the "pymysql" library to connect to the MySQL database and fetch the data into a Pandas dataframe.   

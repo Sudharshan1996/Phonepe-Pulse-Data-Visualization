@@ -272,7 +272,7 @@ if selected == "Explore Data":
         st.markdown("## :violet[Overall State Data - User App opening frequency]")
         mycursor.execute(f"select state, sum(Registered_user) as Total_Users, sum(App_opens) as Total_Appopens from map_user where year = {Year} and quarter = {Quarter} group by state order by state")
         df1 = pd.DataFrame(mycursor.fetchall(), columns=['State', 'Total_Users','Total_Appopens'])
-        df2 = pd.read_csv('Statenames.csv')
+        df2 = pd.read_csv('C:/Users/Sudharshan/Data/Statenames.csv')
         df1.Total_Appopens = df1.Total_Appopens.astype(float)
         df1.State = df2
         
@@ -308,8 +308,5 @@ if selected == "Explore Data":
                      color='Total_Users',
                      color_continuous_scale=px.colors.sequential.Agsunset)
         st.plotly_chart(fig,use_container_width=True)
-            
-            
-            
-            
-            
+        
+      ------------------------------------------------------------------------------------------------------------------------------------------------------------------

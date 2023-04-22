@@ -27,15 +27,15 @@ Importing the libraries. As I have already mentioned above the list of libraries
     
 If the libraries are already installed then we have to import those into our script by mentioning the below codes.
 
-    import streamlit as st
     import pandas as pd
-    import mysql.connector as msql
-    from mysql.connector import Error
+    import mysql.connector as sql
+    import streamlit as st
     import plotly.express as px
-    import geopandas as gpd
+    import os
+    import json
     from streamlit_option_menu import option_menu
     from PIL import Image
-    import os
+    from git.repo.base import Repo
 
 # Step 2:
 
@@ -50,47 +50,43 @@ Data transformation:
 
 In this step the JSON files that are available in the folders are converted into the readeable and understandable DataFrame format by using the for loop and iterating file by file and then finally the DataFrame is created. In order to perform this step I've used os, json and pandas packages. And finally converted the dataframe into CSV file and storing in the local drive.   
 
-       import os
-       path = "C:/Users/Sudharshan/Phonepe Pulse Data Visualization/data/aggregated/transaction/country/india/state/" 
-       agg_trans_st_dir = os.listdir(path)
-       agg_trans_st_dir
+       path1 = "Path of the JSON files"
+       agg_trans_list = os.listdir(path1)
+
+       # Give any column names that you want
+       columns1 = {'State': [], 'Year': [], 'Quarter': [], 'Transaction_type': [], 'Transaction_count': [],'Transaction_amount': []}
 
 Looping through each and every folder and opening the json files appending only the required key and values and creating the dataframe.    
   
-       agg_trans_dict = {'State':[],
-                         'Year':[],
-                         'Quater':[],
-                         'Transacion_type':[],
-                         'Transacion_count':[],
-                         'Transacion_amount':[]}
+       for state in agg_trans_list:
+          cur_state = path1 + state + "/"
+          agg_year_list = os.listdir(cur_state)
 
-     for i in agg_trans_st_dir:
-           st_path = path+i+'/'
-           st_year = os.listdir(st_path)
-     for j in st_year:   
-          st_year_path = st_path+j+'/'
-          st_year_dir = os.listdir(st_year_path)
-     for k in st_year_dir:
-         json_path = st_year_path+k
-         jsonData = open(json_path, 'r')
-         Data = json.load(jsonData)
-     for x in Data['data']['transactionData']:
-                    Name = x['name']
-                    count = x['paymentInstruments'][0]['count']
-                    amount = x['paymentInstruments'][0]['amount']
-                    agg_trans_dict['Transacion_type'].append(Name)
-                    agg_trans_dict['Transacion_count'].append(count)
-                    agg_trans_dict['Transacion_amount'].append(amount)
-                    agg_trans_dict['State'].append(i)
-                    agg_trans_dict['Year'].append(j)
-                    agg_trans_dict['Quater'].append('Q'+k.strip('.json'))
+      for year in agg_year_list:
+        cur_year = cur_state + year + "/"
+        agg_file_list = os.listdir(cur_year)
 
-     agg_trans_df = pd.DataFrame(agg_trans_dict)
-     agg_trans_df
-     
+       for file in agg_file_list:
+            cur_file = cur_year + file
+            data = open(cur_file, 'r')
+            A = json.load(data)
+
+       for i in A['data']['transactionData']:
+                name = i['name']
+                count = i['paymentInstruments'][0]['count']
+                amount = i['paymentInstruments'][0]['amount']
+                columns1['Transaction_type'].append(name)
+                columns1['Transaction_count'].append(count)
+                columns1['Transaction_amount'].append(amount)
+                columns1['State'].append(state)
+                columns1['Year'].append(year)
+                columns1['Quarter'].append(int(file.strip('.json')))
+            
+       df = pd.DataFrame(columns1)
+       
 # Converting the dataframe into csv file
 
-     agg_trans_df.to_csv('AggTransByStates.csv',index=False)
+      agg_trans_df.to_csv('AggTransByStates.csv',index=False)
 
 # Step 4:
 
@@ -100,64 +96,25 @@ To insert the datadrame into SQL first I've created a new database and tables us
 
 Creating the connection between python and mysql
 
-   try:
-    conn = msql.connect(host='localhost',
-                           database='phonepe_pulse', user='root',
-                           password='Dharshan1996')
-    if conn.is_connected():
-        cursor = conn.cursor()
-        cursor.execute("select database();")
-        record = cursor.fetchone()
-        
-        cursor.execute('DROP TABLE IF EXISTS mapTransByDistrict;')
-       
-        cursor.execute("CREATE TABLE mapTransByDistrict\
-                       (State varchar(100),\
-                        Year int,\
-                        Quater varchar(5),\
-                        District varchar(50),\
-                        Transaction_count int,\
-                        Transaction_amount float(50,3))")
-                       
-        print("mapTransByDistrict table is created....")
-        for i,row in mapTransByDistrict.iterrows():
-            sql = "INSERT INTO Phonepe_Pulse.mapTransByDistrict VALUES (%s,%s,%s,%s,%s,%s)"
-            cursor.execute(sql, tuple(row))                        
-            conn.commit()
-        print("mapTransByDistrict values are inserted to MySQL....")
-    except Error as e:
-    print("Error while connecting to MySQL", e)
-       
+     mydb = sql.connect(host="localhost",
+               user="username",
+               password="password",
+               database= "phonepe_pulse"
+              )
+    mycursor = mydb.cursor(buffered=True)
+    
 Creating tables
+
+    mycursor.execute("create table 'Table name' (col1 varchar(100), col2 int, col3 int, col4 varchar(100), col5 int, col6 double)")
+
+    for i,row in df.iterrows():
     
-    try:
-    conn = msql.connect(host='localhost',
-                           database='phonepe_pulse', user='root',
-                           password='Dharshan1996')
-    if conn.is_connected():
-        cursor = conn.cursor()
-        cursor.execute("select database();")
-        record = cursor.fetchone()
+        #here %S means string values 
+        sql = "INSERT INTO agg_trans VALUES (%s,%s,%s,%s,%s,%s)"
+        mycursor.execute(sql, tuple(row))
         
-        cursor.execute('DROP TABLE IF EXISTS mapUserByDistReg;')
-       
-        cursor.execute("CREATE TABLE mapUserByDistReg\
-                       (State varchar(100),\
-                        Year int,\
-                        Quater varchar(5),\
-                        District varchar(50),\
-                        Registered_user int,\
-                        App_opening int)")
-                       
-        print("mapUserByDistReg table is created....")
-        for i,row in mapUserByDistReg.iterrows():
-            sql = "INSERT INTO Phonepe_Pulse.mapUserByDistReg VALUES (%s,%s,%s,%s,%s,%s)"
-            cursor.execute(sql, tuple(row))                        
-            conn.commit()
-        print("mapUserByDistReg values are inserted to MySQL....")
-    except Error as e:
-    print("Error while connecting to MySQL", e)
-    
+        # the connection is not auto committed by default, so we must commit to save our changes
+        mydb.commit()
 # Step 5:
 
 Dashboard creation:

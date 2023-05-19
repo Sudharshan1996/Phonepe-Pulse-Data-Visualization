@@ -27,14 +27,15 @@ Importing the libraries. As I have already mentioned above the list of libraries
     
 If the libraries are already installed then we have to import those into our script by mentioning the below codes.
 
+    import pymysql
     import pandas as pd
-    import mysql.connector as sql
-    import streamlit as st
-    import plotly.express as px
+    import sqlalchemy
+    from sqlalchemy import text
+    import socket
     import os
-    import json
-    from streamlit_option_menu import option_menu
-    from PIL import Image
+    from os import walk
+    from pathlib import Path
+    import pandas as pd
     from git.repo.base import Repo
 
 # Step 2:
@@ -48,45 +49,56 @@ Clone the Github using scripting to fetch the data from the Phonepe pulse Github
     
 Data transformation:
 
-In this step the JSON files that are available in the folders are converted into the readeable and understandable DataFrame format by using the for loop and iterating file by file and then finally the DataFrame is created. In order to perform this step I've used os, json and pandas packages. And finally converted the dataframe into CSV file and storing in the local drive.   
+In this step, dataframe has been converte into the readeable and understandable dataframe format by using this syntax.And finally converted the dataframe into CSV file and storing in the local drive.
 
-       path1 = "Path of the JSON files"
-       agg_trans_list = os.listdir(path1)
+      Data_Aggregated_Transaction_Table = pd.DataFrame({}) 
+      Data_Aggregated_Transaction_Summary_Table = pd.DataFrame({}) 
 
-       # Give any column names that you want
-       columns1 = {'State': [], 'Year': [], 'Quarter': [], 'Transaction_type': [], 'Transaction_count': [],'Transaction_amount': []}
 
 Looping through each and every folder and opening the json files appending only the required key and values and creating the dataframe.    
-  
-       for state in agg_trans_list:
-          cur_state = path1 + state + "/"
-          agg_year_list = os.listdir(cur_state)
-
-      for year in agg_year_list:
-        cur_year = cur_state + year + "/"
-        agg_file_list = os.listdir(cur_year)
-
-       for file in agg_file_list:
-            cur_file = cur_year + file
-            data = open(cur_file, 'r')
-            A = json.load(data)
-
-       for i in A['data']['transactionData']:
-                name = i['name']
-                count = i['paymentInstruments'][0]['count']
-                amount = i['paymentInstruments'][0]['amount']
-                columns1['Transaction_type'].append(name)
-                columns1['Transaction_count'].append(count)
-                columns1['Transaction_amount'].append(amount)
-                columns1['State'].append(state)
-                columns1['Year'].append(year)
-                columns1['Quarter'].append(int(file.strip('.json')))
+        
+       def Aggregated_Transaction_Table_fun(state,year,quarter,path):
+       global Data_Aggregated_Transaction_Table
+       global Data_Aggregated_Transaction_Summary_Table
+       dft = pd.read_json(path)
+    
+       dataFrom=dft['data']['from']
+       dataTo=dft['data']['to'] 
+       T_row={'State':state,'Year': year,'Quarter':quarter,'Data From':dataFrom,'Data To':dataTo}
+       Data_Aggregated_Transaction_Summary_Table=Data_Aggregated_Transaction_Summary_Table.append(T_row,ignore_index = True)
+    
+       DAT_temp=dft['data']['transactionData']
+       if DAT_temp:      
+        for i in DAT_temp:
+            DAT_row={ 'Payment Mode':i['name'], 'Total Transactions count':i['paymentInstruments'][0]['count'], 'Total Amount':i['paymentInstruments'][0]                             ['amount'],'Quarter':quarter,'Year': year,'State':state}  
+            Data_Aggregated_Transaction_Table = Data_Aggregated_Transaction_Table.append(DAT_row, ignore_index = True)
             
-       df = pd.DataFrame(columns1)
-       
+PATH FOR ALL STATES IN AGGREGATED TRANSACTIONS
+       t_s= r"C:/Users/Sudharshan/Phonepe Pulse Data Visualization\data\aggregated\transaction\country\india\state"
+       t_path = r"C:/Users/Sudharshan/Phonepe Pulse Data Visualization\data\aggregated\transaction\country\india\state"
+       t_states = os.listdir(t_path) # NAMES OF ALL DIRECTORIES IN STATES (36 STATES)
+
+       for i in t_states:
+             #print(i)                  
+             p=t_s+'\\'+i                      
+             states_year=os.listdir(p)        
+      for j in states_year:             
+             #print(j)
+             pt=p+'\\'+j                    
+             f=[]
+      for (dirpath, dirnames, filenames) in walk(pt):
+            f.extend(filenames)         
+            break
+      for k in f:                    
+            fp=pt+'\\'+k               
+            fn=Path(fp).stem           
+            #print(i,j,fn)
+            Aggregated_Transaction_Table_fun(i,j,fn,fp) 
+            #print(fp)             
+                
 # Converting the dataframe into csv file
 
-      agg_trans_df.to_csv('AggTransByStates.csv',index=False)
+      Data_Aggregated_Transaction_Table.to_csv('Data_Aggregated_Transaction_Table.csv',index=False)
 
 # Step 4:
 
@@ -94,27 +106,24 @@ Looping through each and every folder and opening the json files appending only 
 
 To insert the datadrame into SQL first I've created a new database and tables using "mysql-connector-python" library in Python to connect to a MySQL database and insert the transformed data using SQL commands.
 
-Creating the connection between python and mysql
+Creating the connection between python and MySQL
 
-     mydb = sql.connect(host="localhost",
-               user="username",
-               password="password",
-               database= "phonepe_pulse"
-              )
-    mycursor = mydb.cursor(buffered=True)
+       user = 'root'
+       password = 'Dharshan1996'
+       host = 'localhost'
+       port = 3306
+       database = 'phonepe_pulse'
+       connection = sqlalchemy.create_engine("mysql+pymysql://{0}:{1}@{2}:{3}/{4}".format(user, password, host, port, database))
     
 Creating tables
-
-    mycursor.execute("create table 'Table name' (col1 varchar(100), col2 int, col3 int, col4 varchar(100), col5 int, col6 double)")
-
-    for i,row in df.iterrows():
-    
-        #here %S means string values 
-        sql = "INSERT INTO agg_trans VALUES (%s,%s,%s,%s,%s,%s)"
-        mycursor.execute(sql, tuple(row))
-        
-        # the connection is not auto committed by default, so we must commit to save our changes
-        mydb.commit()
+         
+         sql = text('CREATE TABLE Data_Aggregated_Transaction_Table1 (MyIndex INT NOT NULL AUTO_INCREMENT,Payment_Mode VARCHAR(50),Total_Transactions_count                            BIGINT,Total_Amount BIGINT,Quater INT,Year INT,State INT,PRIMARY KEY (MyIndex))')
+         connection.execute(sql)
+         sql = text("use phonepe_pulse")
+         connection.execute(sql)
+         df = pd.read_csv("C:/Users/Sudharshan/Phonepe Data Extraction/Data_Aggregated_Transaction_Table1.csv")
+         df.to_sql('data_aggregated_transaction_table',con=connection, if_exists= "replace",index=False, chunksize=10000)
+   
 # Step 5:
 
 Dashboard creation:

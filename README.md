@@ -78,7 +78,7 @@ PATH FOR ALL STATES IN AGGREGATED TRANSACTIONS
        t_path = r"C:/Users/Sudharshan/Phonepe Pulse Data Visualization\data\aggregated\transaction\country\india\state"
        t_states = os.listdir(t_path) # NAMES OF ALL DIRECTORIES IN STATES (36 STATES)
 
-       for i in t_states:
+      for i in t_states:
              #print(i)                  
              p=t_s+'\\'+i                      
              states_year=os.listdir(p)        
